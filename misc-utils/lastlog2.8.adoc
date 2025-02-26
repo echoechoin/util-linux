@@ -64,6 +64,9 @@ Print only last login records more recent than _DAYS_.
 *-u*, *--users* _LOGINS_::
 Print only the last login record of the user _LOGIN_.
 
+*-a*, *--active*::
+Print last login records excluding users who have never logged in.
+
 *-v*, *--version*::
 Print version number and exit.
 

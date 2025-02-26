@@ -46,6 +46,7 @@ static time_t b_days;
 static int tflg;
 static time_t t_days;
 static int sflg;
+static int aflg;
 
 static int print_entry(const char *user, int64_t ll_time,
 		const char *tty, const char *rhost,
@@ -78,8 +79,11 @@ static int print_entry(const char *user, int64_t ll_time,
 		datep = datetime;
 	}
 
-	if (ll_time == 0)
+	if (ll_time == 0) {
+		if (aflg)
+			return 0;
 		datep = "**Never logged in**";
+	}
 
 	if (!once) {
 		printf("Username         Port     From%*s Latest%*s%s\n",
@@ -117,6 +121,7 @@ static void __attribute__((__noreturn__)) usage(void)
 	fputs(_(" -S, --set               set lastlog record to current time (requires -u)\n"), output);
 	fputs(_(" -t, --time DAYS         print only lastlog records more recent than DAYS\n"), output);
 	fputs(_(" -u, --user LOGIN        print lastlog record of the specified LOGIN\n"), output);
+	fputs(_(" -a, --active            print lastlog excluding '**Never logged in**' users\n"), output);
 
 	fputs(USAGE_SEPARATOR, output);
 	fprintf(output, USAGE_HELP_OPTIONS(25));
@@ -141,6 +146,7 @@ int main(int argc, char **argv)
 		{"set",      no_argument,       NULL, 'S'},
 		{"time",     required_argument, NULL, 't'},
 		{"user",     required_argument, NULL, 'u'},
+		{"active",   no_argument,       NULL, 'a'},
 		{"version",  no_argument,       NULL, 'v'},
 		{NULL, 0, NULL, '\0'}
 	};
@@ -157,7 +163,7 @@ int main(int argc, char **argv)
 
 	int c;
 
-	while ((c = getopt_long(argc, argv, "b:Cd:hi:r:sSt:u:v", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "b:Cd:hi:r:sSt:u:av", longopts, NULL)) != -1) {
 		switch (c) {
 		case 'b': /* before DAYS; Print only records older than DAYS */
 			{
@@ -204,6 +210,9 @@ int main(int argc, char **argv)
 		case 'u': /* user <LOGIN>; Print lastlog record of the specified LOGIN */
 			uflg = 1;
 			user = optarg;
+			break;
+		case 'a': /* active; print lastlog excluding '**Never logged in**' users */
+			aflg = 1;
 			break;
 		case 'v': /* version; Print version number and exit */
 			print_version(EXIT_SUCCESS);
