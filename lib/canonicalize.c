@@ -15,11 +15,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <libgen.h>
 
 #include "canonicalize.h"
 #include "pathnames.h"
 #include "all-io.h"
 #include "strutils.h"
+#include "xalloc.h"
+#include "fileutils.h"
 
 /*
  * Converts private "dm-N" names to "/dev/mapper/<name>"
@@ -118,6 +121,79 @@ char *absolute_path(const char *path)
 	return res;
 }
 
+static char *canoicalize_path_if_can_be_created(const char *p)
+{
+    size_t len;
+    int new_basename = 0;
+    char *path = NULL, *path_copy = NULL, *parent_dir = NULL, *tmp = NULL;
+    char *base_name;
+    char *result = NULL;
+
+    if (!p)
+        return result;
+
+    path = xstrdup(p);
+    if (!path)
+        goto cleanup;
+
+    path_copy = xstrdup(path);
+    if (!path_copy)
+        goto cleanup;
+
+    parent_dir = dirname(path);
+    if (!parent_dir)
+        goto cleanup;
+
+    base_name = ul_basename(path_copy);
+    if (!base_name)
+        goto cleanup;
+
+    /* check if the parent directory is accessible */
+    parent_dir = realpath(parent_dir, NULL);
+    if (!parent_dir)
+        goto cleanup;
+
+    tmp = xstrdup(parent_dir);
+    if (!tmp)
+        goto cleanup;
+
+    /* handle "." or ".." */
+    if (strncmp(base_name, ".", 1) == 0) {
+        parent_dir = dirname(parent_dir);
+        new_basename = 1;
+    }
+    
+    if (strncmp(base_name, "..", 2) == 0) {
+        free(tmp);
+        tmp = xstrdup(parent_dir);
+        if (!tmp)
+            goto cleanup;
+        parent_dir = dirname(parent_dir);
+        new_basename = 1;
+    }
+    
+    if (new_basename)
+        base_name = ul_basename(tmp);
+
+    /* check if the directory is writable */
+    if (access(parent_dir, W_OK) != 0)
+        goto cleanup;
+    
+    /* construct the result */
+    len = strlen(parent_dir) + strlen(base_name) + 2;
+    result = malloc(len);
+    if (result)
+        snprintf(result, len, "%s/%s", parent_dir, base_name);
+
+cleanup:
+    free(tmp);
+    free(parent_dir);
+    free(path);
+    free(path_copy);
+    return result;
+}
+
+
 char *canonicalize_path(const char *path)
 {
 	char *canonical, *dmname;
@@ -184,6 +260,9 @@ char *canonicalize_path_restricted(const char *path)
 				}
 			}
 		}
+
+		if (!canonical)
+			canonical = canoicalize_path_if_can_be_created(path);
 
 		len = canonical ? (ssize_t) strlen(canonical) :
 		          errno ? -errno : -EINVAL;
