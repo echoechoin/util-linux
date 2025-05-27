@@ -118,6 +118,62 @@ char *absolute_path(const char *path)
 	return res;
 }
 
+/* canonicalize path whatever it is exists or not */
+char *normalize_path(const char* path)
+{
+	int pos;
+	char *result = NULL;
+	short *stack = NULL;
+	short stack_top;
+
+	if (!path || !*path)
+		goto done;
+
+	char *abs_path = absolute_path(path);
+	if (!abs_path)
+		abs_path = strdup(path);
+
+	if (!abs_path)
+		goto done;
+
+	result = malloc(PATH_MAX);
+	if (!result)
+		goto done;
+
+	stack = malloc(sizeof(short) * PATH_MAX);
+	if (!stack)
+		goto done;
+
+	stack_top = -1;
+
+	/* split path */
+	char* token = strtok(abs_path, "/");
+	while (token) {
+		if (strcmp(token, ".") == 0) {
+			/* do nothing */
+		} else if (strcmp(token, "..") == 0 && stack_top != -1) {
+			/* pop stack */
+			pos = stack[--stack_top] + 1;
+			result[pos] = '\0';
+		} else {
+			/* push stack */
+			pos = 0;
+			if (stack_top != -1)
+				pos = stack[stack_top] + 1;
+			snprintf(result + pos, PATH_MAX - pos, "/%s", token);
+			stack[++stack_top] = pos + strlen(token);
+		}
+		token = strtok(NULL, "/");
+	}
+	if (!*result)
+		memcpy(result, "/", 1);
+
+done:
+	free(abs_path);
+	free(stack);
+	return result;
+}
+
 char *canonicalize_path(const char *path)
 {
 	char *canonical, *dmname;

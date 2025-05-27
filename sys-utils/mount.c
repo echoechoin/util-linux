@@ -32,6 +32,7 @@
 #include "canonicalize.h"
 #include "pathnames.h"
 #include "strv.h"
+#include "fileutils.h"
 
 #define XALLOC_EXIT_CODE MNT_EX_SYSERR
 #include "xalloc.h"
@@ -486,6 +487,8 @@ static int sanitize_paths(struct libmnt_context *cxt)
 	p = mnt_fs_get_target(fs);
 	if (p) {
 		char *np = canonicalize_path_restricted(p);
+		if (!np)
+			np = ul_mkdir_p_precheck(p);
 		if (!np)
 			return -EPERM;
 		mnt_fs_set_target(fs, np);

@@ -199,7 +199,7 @@ endif
 test_fileeq_SOURCES = lib/fileeq.c
 test_fileeq_CFLAGS = $(AM_CFLAGS) -DTEST_PROGRAM_FILEEQ
 
-test_fileutils_SOURCES = lib/fileutils.c
+test_fileutils_SOURCES = lib/fileutils.c lib/canonicalize.c
 test_fileutils_CFLAGS = $(AM_CFLAGS) -DTEST_PROGRAM_FILEUTILS
 
 test_canonicalize_SOURCES = lib/canonicalize.c

@@ -17,6 +17,7 @@
 #include "all-io.h"
 #include "fileutils.h"
 #include "pathnames.h"
+#include "canonicalize.h"
 
 int mkstemp_cloexec(char *template)
 {
@@ -206,6 +207,65 @@ int main(int argc, char *argv[])
 }
 #endif
 
+extern char *ul_mkdir_p_precheck(const char *path)
+{
+	char *result = NULL;
+	char *p = NULL, *last_slash = NULL;
+	struct stat st;
+
+	/* get normalized path */
+	result = normalize_path(path);
+	if (!result)
+		return NULL;
+
+	/* check each directory level */
+	for (p = result + 1; *p; p++) {
+		if (*p != '/')
+			continue;
+		*p = 0; /* temporarily terminate the string */
+
+		/* check if path is accessible */
+		if (access(result, F_OK) != 0) {
+			if (last_slash)
+				*last_slash = '\0';
+
+			/* check if path is writeable and is a directory */
+			if (access(result, W_OK) == 0
+				&& stat(result, &st) == 0
+				&& S_ISDIR(st.st_mode)) {
+				*p = '/';
+				if (last_slash) *last_slash = '/';
+				return result;
+			}
+			free(result);
+			return NULL;
+		}
+		*p = '/'; /* restore the slash */
+		last_slash = p;
+	}
+
+	/* check if path is not a directory */
+	if (access(result, F_OK) == 0 &&
+		stat(result, &st) == 0 &&
+		!S_ISDIR(st.st_mode)) {
+		free(result);
+		return NULL;
+	}
+
+	if (last_slash) *last_slash = '\0';
+
+	/* check if parent path is writeable and is a directory */
+	if (access(result, W_OK) == 0 &&
+		stat(result, &st) == 0 &&
+		S_ISDIR(st.st_mode)) {
+		if (last_slash) *last_slash = '/';
+		return result;
+	}
+		
+	free(result);
+	return NULL;
+}
+
 
 int ul_mkdir_p(const char *path, mode_t mode)
 {
@@ -240,6 +300,48 @@ int ul_mkdir_p(const char *path, mode_t mode)
 
 	free(dir);
 	return rc;
+}
+
+int ul_mkdir_p_restrict(const char *path, mode_t mode)
+{
+	int pid;
+	int result;
+	int pipes[2];
+	if (pipe(pipes) != 0)
+		return -1;
+
+	pid = fork();
+	switch (pid) {
+	case -1:
+		close(pipes[0]);
+		close(pipes[1]);
+		return -1;			/* fork error */
+	case 0:
+		close(pipes[0]);		/* close unused end */
+		pipes[0] = -1;
+		errno = 0;
+
+		if (drop_permissions() != 0)
+			result = -1;	/* failed */
+		else {
+			result = ul_mkdir_p(path, mode);
+		}
+
+		/* send length or errno */
+		write_all(pipes[1], (char *) &result, sizeof(result));
+		exit(0);
+	default:
+		break;
+	}
+
+	close(pipes[1]);		/* close unused end */
+	pipes[1] = -1;
+
+	/* read size or -errno */
+	if (read_all(pipes[0], (char *) &result, sizeof(result)) != sizeof(result))
+		return -1;
+
+	return result;
 }
 
 /* returns basename and keeps dirname in the @path, if @path is "/" (root)
