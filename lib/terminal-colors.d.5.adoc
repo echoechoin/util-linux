@@ -56,11 +56,27 @@ The _name_ is a logical name for the color sequence (for example: *error*).
 The names are specific to the utilities. For more details always see
 the *COLORS* section in the man page for the utility.
 
-The _color-sequence_ is a color name, ASCII color sequences, or escape sequences.
+The _color-sequence_ is a color name, hex RGB notation, ASCII color sequences, or escape sequences.
 
 === Color names
 
 black, blink, blue, bold, brown, cyan, darkgray, gray, green, halfbright, lightblue, lightcyan, lightgray, lightgreen, lightmagenta, lightred, magenta, red, reset, reverse, and yellow.
+
+=== Hex notation for RGB colors
+
+Hex RGB notation is supported for 24-bit (truecolor) foreground. The sequence generated is the ANSI escape *38;2;R;G;B* (Select Graphic Rendition: 24-bit foreground).
+
+*#RRGGBB*::
+Six hexadecimal digits; each pair gives the red, green, and blue component (0–255). For example, *#ff0000* is red, *#00ff00* is green, *#0000ff* is blue.
+
+*#RGB*::
+Three hexadecimal digits; each digit is repeated to form a six-digit value (e.g. *#f00* is the same as *#ff0000*).
+
+Terminals that support 24-bit color will use the exact RGB value; others may approximate or ignore it.
+
+For example, to use a red background for alert messages in the output of *dmesg*(1), use:
+
+``  *echo 'alert #FF0000' >> /etc/terminal-colors.d/dmesg.scheme*``
 
 === ANSI color sequences
 
