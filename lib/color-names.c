@@ -82,6 +82,50 @@ int color_is_sequence(const char *color)
 	return 0;
 }
 
+/* canonicalize sequence for 24bit colors (#RRGGBB or #RGB) */
+static char *__color_canonicalize_24bit(const char *str)
+{
+	unsigned int r, g, b;
+	size_t len;
+	char *out;
+	char rr[3], gg[3], bb[3];
+
+	if (!str || str[0] != '#')
+		return NULL;
+
+	len = strlen(str);
+	if (len == 7) {
+		/* #RRGGBB: two hex digits per channel */
+		if (!isxdigit((unsigned char)str[1]) || !isxdigit((unsigned char)str[2]) ||
+		    !isxdigit((unsigned char)str[3]) || !isxdigit((unsigned char)str[4]) ||
+		    !isxdigit((unsigned char)str[5]) || !isxdigit((unsigned char)str[6]))
+			return NULL;
+		rr[0] = str[1]; rr[1] = str[2]; rr[2] = '\0';
+		gg[0] = str[3]; gg[1] = str[4]; gg[2] = '\0';
+		bb[0] = str[5]; bb[1] = str[6]; bb[2] = '\0';
+		r = strtoul(rr, NULL, 16);
+		g = strtoul(gg, NULL, 16);
+		b = strtoul(bb, NULL, 16);
+	} else if (len == 4) {
+		/* #RGB: one hex digit per channel, expand to 0-255 */
+		if (!isxdigit((unsigned char)str[1]) || !isxdigit((unsigned char)str[2]) ||
+		    !isxdigit((unsigned char)str[3]))
+			return NULL;
+		rr[0] = rr[1] = str[1]; rr[2] = '\0';
+		gg[0] = gg[1] = str[2]; gg[2] = '\0';
+		bb[0] = bb[1] = str[3]; bb[2] = '\0';
+		r = strtoul(rr, NULL, 16);
+		g = strtoul(gg, NULL, 16);
+		b = strtoul(bb, NULL, 16);
+	} else {
+		return NULL;
+	}
+
+	if (asprintf(&out, "\033[38;2;%u;%u;%um", r, g, b) < 0)
+		return NULL;
+	return out;
+}
+
 /* canonicalize sequence */
 static int __color_canonicalize(const char *str, char **seq)
 {
@@ -92,6 +136,19 @@ static int __color_canonicalize(const char *str, char **seq)
 		return -EINVAL;
 
 	*seq = NULL;
+
+	/* convert #RRGGBB or #RGB to 24-bit foreground sequence */
+	if (str[0] == '#') {
+		size_t n = strlen(str);
+		if (n == 4 || n == 7) {
+			char *hex_seq = __color_canonicalize_24bit(str);
+			if (hex_seq) {
+				*seq = hex_seq;
+				return 0;
+			}
+			return -EINVAL;
+		}
+	}
 
 	/* convert color names like "red" to the real sequence */
 	if (*str != '\\' && !strchr(str, ';') && isalpha(*str)) {
