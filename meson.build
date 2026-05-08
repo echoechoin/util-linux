@@ -176,10 +176,6 @@ headers = '''
         ncursesw/term.h
         ncurses.h
         term.h
-        slang.h
-        slang/slang.h
-        slcurses.h
-        slang/slcurses.h
 '''.split()
 
 foreach header : headers
@@ -314,13 +310,19 @@ else
     required : get_option('ncurses'))
 endif
 
-conf.set('HAVE_LIBNCURSESW', lib_ncursesw.found() ? 1 : false)
-conf.set('HAVE_LIBNCURSES', lib_ncurses.found() ? 1 : false)
-
 lib_slang = dependency(
   'slang',
   required : get_option('slang'))
 conf.set('HAVE_SLANG', lib_slang.found() ? 1 : false)
+
+# Only check for slang headers when the slang library is enabled,
+# otherwise headers could be detected while linking against ncurses.
+if lib_slang.found()
+  foreach h : ['slang.h', 'slang/slang.h', 'slcurses.h', 'slang/slcurses.h']
+    have = cc.has_header(h)
+    conf.set('HAVE_' + h.underscorify().to_upper(), have ? 1 : false)
+  endforeach
+endif
 
 foreach curses_libs : [lib_slang, lib_ncursesw, lib_ncurses]
   if curses_libs.found()
@@ -333,6 +335,19 @@ foreach curses_libs : [lib_slang, lib_ncursesw, lib_ncurses]
     break
   endif
 endforeach
+
+if lib_slang.found()
+  selected_curses = 'slang'
+elif lib_ncursesw.found()
+  selected_curses = 'ncursesw'
+elif lib_ncurses.found()
+  selected_curses = 'ncurses'
+endif
+
+conf.set('HAVE_LIBNCURSESW', selected_curses == 'ncursesw' ? 1 : false)
+conf.set('HAVE_LIBNCURSES', selected_curses == 'ncurses' ? 1 : false)
+
+lib_curses_ncurses = lib_ncursesw.found() ? lib_ncursesw : lib_ncurses
 
 lib_z = dependency(
   'zlib',
@@ -1385,7 +1400,7 @@ exe = executable(
   link_with : lib_common,
   include_directories : includes,
   dependencies : [lib_tinfo,
-                  curses_libs],
+                  lib_curses_ncurses],
   install_dir : usrbin_exec_dir,
   install : opt,
   build_by_default : opt)
@@ -1401,7 +1416,7 @@ exe = executable(
   ul_sources,
   include_directories : includes,
   dependencies : [lib_tinfo,
-                  curses_libs],
+                  lib_curses_ncurses],
   install_dir : usrbin_exec_dir,
   install : opt,
   build_by_default : opt)
@@ -1419,7 +1434,7 @@ exe = executable(
   more_sources,
   link_with : [lib_common],
   include_directories : includes,
-  dependencies : [curses_libs,
+  dependencies : [lib_curses_ncurses,
 		  lib_magic],
   install : opt,
   build_by_default : opt)
@@ -1429,7 +1444,7 @@ exe2 = executable(
   link_with : [lib_common],
   include_directories : includes,
   c_args : '-DTEST_PROGRAM',
-  dependencies : [curses_libs,
+  dependencies : [lib_curses_ncurses,
 		  lib_magic],
   build_by_default : opt and program_tests)
 exes += exe
@@ -2769,7 +2784,7 @@ exe = executable(
   setterm_sources,
   include_directories : includes,
   link_with : [lib_common],
-  dependencies : [curses_libs],
+  dependencies : [lib_curses_ncurses],
   install_dir : usrbin_exec_dir,
   install : opt,
   build_by_default : opt)
